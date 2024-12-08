@@ -40,6 +40,8 @@ func AddCommands() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := baler.Convert(args[0], uint32(5120))
 			if err != nil {
+				// TODO: remove this print
+				cmd.PrintErrln(err)
 				cmd.Println("Unexpected error occured!")
 			}
 		},
