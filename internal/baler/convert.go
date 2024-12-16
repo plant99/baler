@@ -114,11 +114,8 @@ func copyContent(srcPath string, destFile *os.File, srcRelativePath string) erro
 	return nil
 }
 func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath string, destinationDir string, config *ConvertConfig) error {
-	// sort entries alphabetically
-	entries, err := os.ReadDir(absProcessingDirPath)
-	if err != nil {
-		return err
-	}
+	processingStack := []string{absProcessingDirPath}
+
 	absSourcePath, err := filepath.Abs(sourcePath)
 	if err != nil {
 		return err
@@ -127,77 +124,84 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 	outputFileName := fmt.Sprintf("output_%s.txt", strconv.Itoa(fileCounter))
 	destinationFileName := filepath.Join(destinationDir, outputFileName)
 
-	f, err := os.OpenFile(destinationFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	destinationFile, err := os.OpenFile(destinationFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	// TODO: how would clean-up work in recursion
-	defer f.Close()
+	defer destinationFile.Close()
 
-	// iterate through entries
-	for _, entry := range entries {
-		absPath := filepath.Join(absProcessingDirPath, entry.Name())
-		relPath, err := filepath.Rel(absSourcePath, absPath)
+	for len(processingStack) > 0 {
+		currentDir := processingStack[len(processingStack)-1]
+		processingStack = processingStack[:len(processingStack)-1]
+
+		entries, err := os.ReadDir(currentDir)
 		if err != nil {
 			return err
 		}
-
-		// ignore logic
-		if ignore, err := shouldIgnore(relPath, config.ExclusionPatterns); err != nil {
-			return err
-		} else if ignore {
-			continue
-		}
-
-		// for each file write the file into converted text file
-		// for each directory, run convertDirectoryAndSaveToFile recursively
-		if !entry.IsDir() {
-			// file validation before processing
-			validationResult, err := validateFile(absPath, config)
+		// iterate through entries
+		for _, entry := range entries {
+			absPath := filepath.Join(currentDir, entry.Name())
+			relPath, err := filepath.Rel(absSourcePath, absPath)
 			if err != nil {
 				return err
 			}
-			if !validationResult.IsValidLines || !validationResult.IsValidSize || !validationResult.IsValidUTF8 {
-				// TODO: log
+
+			// ignore logic
+			if ignore, err := shouldIgnore(relPath, config.ExclusionPatterns); err != nil {
+				return err
+			} else if ignore {
 				continue
 			}
-			// check if entry + existing sink file exceeds size limit
-			// if so, increment file name counter and set it as sink
-			currentDestinationFileInfo, err := f.Stat()
-			if err != nil {
-				return err
-			}
-			currentDestinationFileSize := currentDestinationFileInfo.Size()
-			// 5242880 = 5 * 1024 * 1024
-			if currentDestinationFileSize+int64(validationResult.Size) > int64(config.MaxOutputFileSize) {
-				// close reference to old file
-				f.Close()
 
-				// update reference to new file
-				/*
-					TODO: Ideally the function call could be idempotent if 'READ' status
-					is maintained somewhere.
-					In which case, we could just increment fileCounter and call the
-					function again.
-				*/
-				fileCounter += 1
-				outputFileName = fmt.Sprintf("output_%s.txt", strconv.Itoa(fileCounter))
-				destinationFileName = filepath.Join(destinationDir, outputFileName)
-				f, err = os.OpenFile(destinationFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			// for each file write the file into converted text file
+			// for each directory, append to processingStack
+			if !entry.IsDir() {
+				// file validation before processing
+				validationResult, err := validateFile(absPath, config)
 				if err != nil {
 					return err
 				}
-				defer f.Close()
-			}
-			// perform copy
-			if err = copyContent(absPath, f, relPath); err != nil {
-				return err
-			}
+				if !validationResult.IsValidLines || !validationResult.IsValidSize || !validationResult.IsValidUTF8 {
+					// TODO: log
+					continue
+				}
+				// check if entry + existing sink file exceeds size limit
+				// if so, increment file name counter and set it as sink
+				currentDestinationFileInfo, err := destinationFile.Stat()
+				if err != nil {
+					return err
+				}
+				currentDestinationFileSize := currentDestinationFileInfo.Size()
+				// 5242880 = 5 * 1024 * 1024
+				if currentDestinationFileSize+int64(validationResult.Size) > int64(config.MaxOutputFileSize) {
+					// close reference to old file
+					destinationFile.Close()
 
-		} else {
-			// process directory
-			// TODO: Could there theoretically be infinite open references to files?
-			convertDirectoryAndSaveToFile(absPath, sourcePath, destinationDir, config)
+					// update reference to new file
+					/*
+						TODO: Ideally the function call could be idempotent if 'READ' status
+						is maintained somewhere.
+						In which case, we could just increment fileCounter and call the
+						function again.
+					*/
+					fileCounter += 1
+					outputFileName = fmt.Sprintf("output_%s.txt", strconv.Itoa(fileCounter))
+					destinationFileName = filepath.Join(destinationDir, outputFileName)
+					destinationFile, err = os.OpenFile(destinationFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if err != nil {
+						return err
+					}
+					defer destinationFile.Close()
+				}
+				// perform copy
+				if err = copyContent(absPath, destinationFile, relPath); err != nil {
+					return err
+				}
+
+			} else {
+				processingStack = append(processingStack, absPath)
+			}
 		}
 	}
 	return nil
