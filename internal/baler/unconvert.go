@@ -1,14 +1,40 @@
 package baler
 
 import (
-	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-func UnConvert(sourceDir string, destinationDir string) error {
+func removeTrailingNewline(file *os.File) error {
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get file stats: %w", err)
+	}
+
+	if info.Size() > 0 {
+		// Check last byte
+		lastByte := make([]byte, 1)
+		if _, err := file.Seek(-1, io.SeekEnd); err != nil {
+			return fmt.Errorf("failed to seek file: %w", err)
+		}
+		if _, err := file.Read(lastByte); err != nil {
+			return fmt.Errorf("failed to read last byte: %w", err)
+		}
+
+		// If last byte is newline, truncate it
+		if lastByte[0] == '\n' {
+			if err := file.Truncate(info.Size() - 1); err != nil {
+				return fmt.Errorf("failed to truncate file: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+func UnConvert(sourceDir string, destinationDir string, config *BalerConfig) error {
 	if _, err := os.Stat(sourceDir); err != nil {
 		return fmt.Errorf("source directory not found: %w", err)
 	}
@@ -33,21 +59,28 @@ func UnConvert(sourceDir string, destinationDir string) error {
 		}
 		defer file.Close()
 
-		scanner := bufio.NewScanner(file)
 		var destinationFile *os.File
 		var destinationFileName string
 
-		buf := make([]byte, 0, 64*1024)
-		// TODO: should come from MaxOutputFileSize
-		// TODO: very long lines break this
-		scanner.Buffer(buf, 5*1024*1024)
-
+		scanner := customScanner(file, config)
 		for scanner.Scan() {
 			line := scanner.Text()
 
-			// check for filename tag
-			if strings.HasPrefix(line, "// filename: ") {
+			// TODO: For a stable release, instead of HasPrefix,
+			// we should check index of delimiter
+			// if present, write the prior text to existing file, create a new file
+			// continue writing to it after the delimiter is scanned
+			// the delimiter can span multiple lines.
+			if strings.HasPrefix(line, config.FileDelimiter) {
 				if destinationFile != nil {
+					// there is ALWAYS a trailing \n from convert function
+					// to the generated baler file
+					// Either we keep a buffered line to write without this \n
+					// if prefix is encountered. Or we do this hack to remove \n
+					// after the file is written.
+					if err := removeTrailingNewline(destinationFile); err != nil {
+						return fmt.Errorf("unable to remove trailing \n: %w", err)
+					}
 					if err := destinationFile.Close(); err != nil {
 						return fmt.Errorf("unable to close file reference: %w", err)
 					}
@@ -61,11 +94,10 @@ func UnConvert(sourceDir string, destinationDir string) error {
 					return fmt.Errorf("failed to create directory for path: %s . Error: %w", destinationPath, err)
 				}
 
-				destinationFile, err = os.OpenFile(destinationPath, os.O_CREATE|os.O_WRONLY, 0644)
+				destinationFile, err = os.OpenFile(destinationPath, os.O_CREATE|os.O_RDWR, 0644)
 				if err != nil {
 					return fmt.Errorf("failed to create file: %s. error: %w", destinationFileName, err)
 				}
-				scanner.Scan()
 				continue
 			}
 

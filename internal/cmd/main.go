@@ -32,13 +32,21 @@ func AddCommands() {
 	var maxInputFileSize uint64
 	var maxInputFileLines uint64
 	var maxOutputFileSize uint64
+	var maxBufferSize uint64
 	var exclusionPatterns []string
+	var fileDelimiter string
 	var convertCmd = &cobra.Command{
 		Use:   "convert",
-		Short: "Convert a directory into the minimum number of text files with size < limit specified.",
-		Long: `Convert a directory into the minimum number of text files with size < limit specified.
+		Short: "Convert a directory into smaller text files.",
+		Long: `Convert a directory into the minimum number of text files.
 
 		Arguments: <source-files-directory> <converted-files-directory>
+
+
+		Size Handling:
+			- Input files larger than --max-input-size are skipped
+			- Output files are split when they reach --max-output-size
+			- Read/Write buffer size defaults to input file size if not specified
 
 		e.g/
 
@@ -46,13 +54,16 @@ func AddCommands() {
 		`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
-			convertConfig := &baler.ConvertConfig{
+			config := &baler.BalerConfig{
 				MaxInputFileLines: maxInputFileLines,
 				MaxInputFileSize:  maxInputFileSize,
 				MaxOutputFileSize: maxOutputFileSize,
+				MaxBufferSize:     maxBufferSize,
 				ExclusionPatterns: &exclusionPatterns,
+				Operation:         baler.OperationConvert,
+				FileDelimiter:     fileDelimiter,
 			}
-			err := baler.Convert(args[0], args[1], convertConfig)
+			err := baler.Convert(args[0], args[1], config)
 			if err != nil {
 				// TODO: remove this print
 				cmd.PrintErrln(err)
@@ -60,18 +71,26 @@ func AddCommands() {
 			}
 		},
 	}
-	convertCmd.Flags().Uint64VarP(&maxInputFileSize, "max-file-size", "u", 1*1024*1024, "Set maximum file size (in bytes) to be considered while converting.")
-	convertCmd.Flags().Uint64VarP(&maxInputFileLines, "max-file-lines", "l", 10000, "Set maximum lines a file can have to be considered while converting.")
-	convertCmd.Flags().Uint64VarP(&maxOutputFileSize, "max-output-file-size", "s", 5*1024*1024, "Set maximum size (in bytes) of the generated output file.")
-	convertCmd.Flags().StringSliceVarP(&exclusionPatterns, "exclusion-patterns", "e", []string{}, "A list of exclusion patterns for baler. e.g '-e \"node_modules*\" -e \"poetry.*\" -e \"package.*\"'")
+	convertCmd.Flags().Uint64VarP(&maxInputFileSize, "max-input-file-size", "i", 1*1024*1024, "Set maximum file size (in bytes) to be considered while converting.")
+	convertCmd.Flags().Uint64VarP(&maxInputFileLines, "max-input-file-lines", "l", 10000, "Set maximum lines a file can have to be considered while converting.")
+	convertCmd.Flags().Uint64VarP(&maxOutputFileSize, "max-output-file-size", "o", 5*1024*1024, "Set maximum size (in bytes) of the generated output file.")
+	convertCmd.Flags().Uint64VarP(&maxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
+	convertCmd.Flags().StringVarP(&fileDelimiter, "delimiter", "d", "filename: ", `Text that separates 2 files in the generated file.
+
+		Note that this delimiter is ALWAYS.
+			- prefixed by a new line ("\n")
+			- suffixed by the next file name and a new line ("\n")`)
+	convertCmd.Flags().StringSliceVarP(&exclusionPatterns, "exclude", "e", []string{}, "A list of exclusion patterns for baler. e.g '-e \"node_modules*\" -e \"poetry.*\" -e \"package.*\"'")
 
 	// unconvert a group of files into directory
 	var unconvertCmd = &cobra.Command{
 		Use:   "unconvert",
-		Short: "From a group of converted text files, construct the initial directory of files.",
+		Short: "Restore original files from converted format.",
 		Long: `Reconstruct the group of text files used for 'baler convert', from the output files of baler.
 
 		Arguments: <converted-files-directory> <source-files-directory>
+
+		Buffer size defaults to input file size if not specified.
 
 		e.g/
 
@@ -79,7 +98,13 @@ func AddCommands() {
 		`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := baler.UnConvert(args[0], args[1])
+			config := &baler.BalerConfig{
+				MaxBufferSize:    maxBufferSize,
+				MaxInputFileSize: maxInputFileSize,
+				Operation:        baler.OperationUnconvert,
+				FileDelimiter:    fileDelimiter,
+			}
+			err := baler.UnConvert(args[0], args[1], config)
 			if err != nil {
 				// TODO: remove this print
 				cmd.PrintErrln(err)
@@ -87,5 +112,12 @@ func AddCommands() {
 			}
 		},
 	}
+	unconvertCmd.Flags().Uint64VarP(&maxInputFileSize, "max-input-file-size", "i", 5*1024*1024, "Set maximum size (in bytes) of the input file(s).")
+	unconvertCmd.Flags().Uint64VarP(&maxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
+	unconvertCmd.Flags().StringVarP(&fileDelimiter, "delimiter", "d", "// filename: ", `Text that separates 2 files in the generated file.
+
+		Note that this delimiter is ALWAYS.
+			- prefixed by a new line ("\n")
+			- suffixed by the next file name and a new line ("\n")`)
 	BalerCommand.AddCommand(versionCmd, convertCmd, unconvertCmd)
 }

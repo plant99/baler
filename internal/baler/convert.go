@@ -14,11 +14,21 @@ import (
 // TODO: figure out how to store and update this information alt. global variable
 var fileCounter = 0
 
-type ConvertConfig struct {
+type OperationType string
+
+const (
+	OperationConvert   OperationType = "convert"
+	OperationUnconvert OperationType = "unconvert"
+)
+
+type BalerConfig struct {
 	MaxInputFileLines uint64
 	MaxInputFileSize  uint64
 	MaxOutputFileSize uint64
+	MaxBufferSize     uint64
 	ExclusionPatterns *[]string
+	Operation         OperationType
+	FileDelimiter     string
 }
 
 type ValidationResult struct {
@@ -29,14 +39,20 @@ type ValidationResult struct {
 	Size uint64
 }
 
-func customScanner(file *os.File) *bufio.Scanner {
+func customScanner(file *os.File, config *BalerConfig) *bufio.Scanner {
 	scanner := bufio.NewScanner(file)
 	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 6*1024*1024)
+	var maxBufSize uint64
+	if config.MaxBufferSize > 0 {
+		maxBufSize = config.MaxBufferSize
+	} else {
+		maxBufSize = config.MaxInputFileSize
+	}
+	scanner.Buffer(buf, int(maxBufSize))
 	return scanner
 }
 
-func validateFile(fileName string, config *ConvertConfig) (*ValidationResult, error) {
+func validateFile(fileName string, config *BalerConfig) (*ValidationResult, error) {
 	// TODO: check if it's feasible to return early
 	isValidUTF8 := true
 	isValidLines := true
@@ -56,7 +72,7 @@ func validateFile(fileName string, config *ConvertConfig) (*ValidationResult, er
 		return nil, err
 	}
 	defer file.Close()
-	scanner := customScanner(file)
+	scanner := customScanner(file, config)
 	lineCount := uint32(0)
 
 	for scanner.Scan() {
@@ -92,7 +108,7 @@ func shouldIgnore(relativePath string, patternList *[]string) (bool, error) {
 	return false, nil
 }
 
-func copyContent(srcPath string, destFile *os.File, srcRelativePath string) error {
+func copyContent(srcPath string, destFile *os.File, srcRelativePath string, fileDelimiter string) error {
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
 		return fmt.Errorf("failed to open source file %w", err)
@@ -101,8 +117,7 @@ func copyContent(srcPath string, destFile *os.File, srcRelativePath string) erro
 
 	reader := bufio.NewReader(srcFile)
 	writer := bufio.NewWriter(destFile)
-
-	if _, err := writer.WriteString(fmt.Sprintf("\n\n// filename: %s\n\n", srcRelativePath)); err != nil {
+	if _, err := writer.WriteString(fmt.Sprintf("\n%s%s\n", fileDelimiter, srcRelativePath)); err != nil {
 		return fmt.Errorf("failed to write filename comment: %w", err)
 	}
 	if _, err = io.Copy(writer, reader); err != nil {
@@ -113,7 +128,8 @@ func copyContent(srcPath string, destFile *os.File, srcRelativePath string) erro
 	}
 	return nil
 }
-func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath string, destinationDir string, config *ConvertConfig) error {
+
+func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath string, destinationDir string, config *BalerConfig) error {
 	processingStack := []string{absProcessingDirPath}
 
 	absSourcePath, err := filepath.Abs(sourcePath)
@@ -195,7 +211,7 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 					defer destinationFile.Close()
 				}
 				// perform copy
-				if err = copyContent(absPath, destinationFile, relPath); err != nil {
+				if err = copyContent(absPath, destinationFile, relPath, config.FileDelimiter); err != nil {
 					return err
 				}
 
@@ -207,7 +223,7 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 	return nil
 }
 
-func Convert(inputPath string, outputPath string, config *ConvertConfig) error {
+func Convert(inputPath string, outputPath string, config *BalerConfig) error {
 	// check if input, output paths exists
 	if _, err := os.Stat(inputPath); err != nil {
 		return err
