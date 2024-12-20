@@ -14,21 +14,22 @@ type cobraLogger struct {
 
 func newCobraLogger(cmd *cobra.Command, verbose bool) *cobraLogger {
 	return &cobraLogger{
-		cmd:     cmd,
+		cmd: cmd,
+		// TODO: remove
 		verbose: verbose,
 	}
 }
 
 func (l *cobraLogger) Info(msg string) {
-	l.cmd.Printf("Info: %s\n", msg)
+	l.cmd.Printf("info: %s\n", msg)
 }
 
 func (l *cobraLogger) Warn(msg string) {
-	l.cmd.Printf("Warning: %s\n", msg)
+	l.cmd.Printf("warn: %s\n", msg)
 }
 
 func (l *cobraLogger) Error(msg string) {
-	l.cmd.PrintErrf("Error: %s\n", msg)
+	l.cmd.PrintErrf("error: %s\n", msg)
 }
 
 // TODO: the following function should use cobraLogger

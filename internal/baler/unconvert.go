@@ -154,6 +154,9 @@ func UnConvert(sourceDir string, destinationDir string, config *BalerConfig) *Ba
 				err,
 			)
 		}
+		if config.Verbose {
+			config.Logger.Info("Successfully processed file: " + path)
+		}
 	}
 	return nil
 }

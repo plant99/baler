@@ -194,6 +194,9 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 			if ignore, balerErr := shouldIgnore(relPath, config.ExclusionPatterns); balerErr != nil {
 				return &[]string{}, balerErr
 			} else if ignore {
+				if config.Verbose {
+					config.Logger.Info("Skipping excluded file: " + relPath)
+				}
 				continue
 			}
 
@@ -254,6 +257,9 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 				processingStack = append(processingStack, absPath)
 			}
 			*filesProcessed = append(*filesProcessed, relPath)
+			if config.Verbose {
+				config.Logger.Info("Successfully processed file: " + relPath)
+			}
 		}
 	}
 	return filesProcessed, nil

@@ -31,5 +31,8 @@ type BalerConfig struct {
 	ExclusionPatterns *[]string
 	Operation         OperationType
 	FileDelimiter     string
-	Logger            Logger
+	Verbose           bool
+	// baler app attribute(s)
+	// TODO: move
+	Logger Logger
 }
