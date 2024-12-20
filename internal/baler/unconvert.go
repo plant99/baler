@@ -15,7 +15,6 @@ func removeTrailingNewline(file *os.File) error {
 	}
 
 	if info.Size() > 0 {
-		// Check last byte
 		lastByte := make([]byte, 1)
 		if _, err := file.Seek(-1, io.SeekEnd); err != nil {
 			return fmt.Errorf("failed to seek file: %w", err)
@@ -24,7 +23,8 @@ func removeTrailingNewline(file *os.File) error {
 			return fmt.Errorf("failed to read last byte: %w", err)
 		}
 
-		// If last byte is newline, truncate it
+		// If last byte is newline, remove it
+		// This path is ALWAYS reached
 		if lastByte[0] == '\n' {
 			if err := file.Truncate(info.Size() - 1); err != nil {
 				return fmt.Errorf("failed to truncate file: %w", err)
@@ -66,11 +66,6 @@ func UnConvert(sourceDir string, destinationDir string, config *BalerConfig) err
 		for scanner.Scan() {
 			line := scanner.Text()
 
-			// TODO: For a stable release, instead of HasPrefix,
-			// we should check index of delimiter
-			// if present, write the prior text to existing file, create a new file
-			// continue writing to it after the delimiter is scanned
-			// the delimiter can span multiple lines.
 			if strings.HasPrefix(line, config.FileDelimiter) {
 				if destinationFile != nil {
 					// there is ALWAYS a trailing \n from convert function
@@ -93,7 +88,8 @@ func UnConvert(sourceDir string, destinationDir string, config *BalerConfig) err
 				if err := os.MkdirAll(filepath.Dir(destinationPath), 0755); err != nil {
 					return fmt.Errorf("failed to create directory for path: %s . Error: %w", destinationPath, err)
 				}
-
+				// the read mode is required to remove the extra '\n'
+				// enhancement: it's possible to create isolated file references with different permissions
 				destinationFile, err = os.OpenFile(destinationPath, os.O_CREATE|os.O_RDWR, 0644)
 				if err != nil {
 					return fmt.Errorf("failed to create file: %s. error: %w", destinationFileName, err)

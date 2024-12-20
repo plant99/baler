@@ -8,11 +8,9 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 )
-
-// TODO: figure out how to store and update this information alt. global variable
-var fileCounter = 0
 
 type OperationType string
 
@@ -129,7 +127,40 @@ func copyContent(srcPath string, destFile *os.File, srcRelativePath string, file
 	return nil
 }
 
+func getValidIncreasedFileCounter(outputDir string, fileCounter int) (int, error) {
+	// this function checks the next output_<integer>.txt in outputDir
+	// such that integer > fileCounter
+	// This function runs one per output file
+	var nextBigInteger = fileCounter + 1
+	// avoid collision
+	fileList, err := os.ReadDir(outputDir)
+	if err != nil {
+		return fileCounter, fmt.Errorf("unable to read output directory for file suffix", err)
+	}
+	// map of existing counters
+	existingCounters := make(map[int]bool)
+	for _, file := range fileList {
+		name := file.Name()
+		if !file.IsDir() && strings.HasPrefix(name, "output_") && strings.HasSuffix(name, ".txt") {
+			numStr := name[7 : len(name)-4]
+			if num, err := strconv.Atoi(numStr); err != nil {
+				return fileCounter, fmt.Errorf("encountered invalid file in output directory: %w\n", err)
+			} else {
+				existingCounters[num] = true
+			}
+		}
+	}
+	for {
+		if _, exists := existingCounters[nextBigInteger]; !exists {
+			break
+		}
+		nextBigInteger++
+	}
+	return nextBigInteger, nil
+}
+
 func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath string, destinationDir string, config *BalerConfig) error {
+	var fileCounter = 0
 	processingStack := []string{absProcessingDirPath}
 
 	absSourcePath, err := filepath.Abs(sourcePath)
@@ -189,7 +220,6 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 					return err
 				}
 				currentDestinationFileSize := currentDestinationFileInfo.Size()
-				// 5242880 = 5 * 1024 * 1024
 				if currentDestinationFileSize+int64(validationResult.Size) > int64(config.MaxOutputFileSize) {
 					// close reference to old file
 					destinationFile.Close()
@@ -201,7 +231,10 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 						In which case, we could just increment fileCounter and call the
 						function again.
 					*/
-					fileCounter += 1
+					fileCounter, err := getValidIncreasedFileCounter(destinationDir, fileCounter)
+					if err != nil {
+						return err
+					}
 					outputFileName = fmt.Sprintf("output_%s.txt", strconv.Itoa(fileCounter))
 					destinationFileName = filepath.Join(destinationDir, outputFileName)
 					destinationFile, err = os.OpenFile(destinationFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
