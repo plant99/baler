@@ -35,6 +35,7 @@ func AddCommands() {
 	var maxBufferSize uint64
 	var exclusionPatterns []string
 	var fileDelimiter string
+	var verbose bool
 	var convertCmd = &cobra.Command{
 		Use:   "convert",
 		Short: "Convert a directory into smaller text files.",
@@ -62,19 +63,21 @@ func AddCommands() {
 				ExclusionPatterns: &exclusionPatterns,
 				Operation:         baler.OperationConvert,
 				FileDelimiter:     fileDelimiter,
+				Logger:            newCobraLogger(cmd, verbose),
 			}
-			err := baler.Convert(args[0], args[1], config)
+			// TODO: get output file list
+			_, err := baler.Convert(args[0], args[1], config)
 			if err != nil {
-				// TODO: remove this print
-				cmd.PrintErrln(err)
-				cmd.Println("Unexpected error occured!")
+				handleError(cmd, err)
 			}
+			// TODO: cmd print success
 		},
 	}
 	convertCmd.Flags().Uint64VarP(&maxInputFileSize, "max-input-file-size", "i", 1*1024*1024, "Set maximum file size (in bytes) to be considered while converting.")
 	convertCmd.Flags().Uint64VarP(&maxInputFileLines, "max-input-file-lines", "l", 10000, "Set maximum lines a file can have to be considered while converting.")
 	convertCmd.Flags().Uint64VarP(&maxOutputFileSize, "max-output-file-size", "o", 5*1024*1024, "Set maximum size (in bytes) of the generated output file.")
 	convertCmd.Flags().Uint64VarP(&maxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
+	convertCmd.Flags().BoolVarP(&verbose, "verbose", "v", true, "Set log level to verbose.")
 	convertCmd.Flags().StringVarP(&fileDelimiter, "delimiter", "d", "filename: ", `Text that separates 2 files in the generated file.
 
 		Note that this delimiter is ALWAYS.
@@ -103,17 +106,18 @@ func AddCommands() {
 				MaxInputFileSize: maxInputFileSize,
 				Operation:        baler.OperationUnconvert,
 				FileDelimiter:    fileDelimiter,
+				Logger:           newCobraLogger(cmd, verbose),
 			}
 			err := baler.UnConvert(args[0], args[1], config)
 			if err != nil {
-				// TODO: remove this print
-				cmd.PrintErrln(err)
-				cmd.Println("Unexpected error occured!")
+				handleError(cmd, err)
 			}
+			// TODO: cmd print success
 		},
 	}
 	unconvertCmd.Flags().Uint64VarP(&maxInputFileSize, "max-input-file-size", "i", 5*1024*1024, "Set maximum size (in bytes) of the input file(s).")
 	unconvertCmd.Flags().Uint64VarP(&maxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
+	unconvertCmd.Flags().BoolVarP(&verbose, "verbose", "v", true, "Set log level to verbose.")
 	unconvertCmd.Flags().StringVarP(&fileDelimiter, "delimiter", "d", "// filename: ", `Text that separates 2 files in the generated file.
 
 		Note that this delimiter is ALWAYS.

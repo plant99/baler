@@ -12,23 +12,6 @@ import (
 	"unicode/utf8"
 )
 
-type OperationType string
-
-const (
-	OperationConvert   OperationType = "convert"
-	OperationUnconvert OperationType = "unconvert"
-)
-
-type BalerConfig struct {
-	MaxInputFileLines uint64
-	MaxInputFileSize  uint64
-	MaxOutputFileSize uint64
-	MaxBufferSize     uint64
-	ExclusionPatterns *[]string
-	Operation         OperationType
-	FileDelimiter     string
-}
-
 type ValidationResult struct {
 	IsValidUTF8  bool
 	IsValidLines bool
@@ -50,7 +33,7 @@ func customScanner(file *os.File, config *BalerConfig) *bufio.Scanner {
 	return scanner
 }
 
-func validateFile(fileName string, config *BalerConfig) (*ValidationResult, error) {
+func validateFile(fileName string, config *BalerConfig) (*ValidationResult, *BalerError) {
 	// TODO: check if it's feasible to return early
 	isValidUTF8 := true
 	isValidLines := true
@@ -58,7 +41,7 @@ func validateFile(fileName string, config *BalerConfig) (*ValidationResult, erro
 	// checks without opening the file
 	fileInfo, err := os.Stat(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get file info: %w", err)
+		return nil, NewIOError(fmt.Sprintf("failed to get file info for: %s", fileName), err)
 	}
 
 	if fileInfo.Size() > int64(config.MaxInputFileSize) {
@@ -67,7 +50,7 @@ func validateFile(fileName string, config *BalerConfig) (*ValidationResult, erro
 	// checks including reads of the file
 	file, err := os.Open(fileName)
 	if err != nil {
-		return nil, err
+		return nil, NewIOError(fmt.Sprintf("unable to open: %s", fileName), err)
 	}
 	defer file.Close()
 	scanner := customScanner(file, config)
@@ -80,7 +63,7 @@ func validateFile(fileName string, config *BalerConfig) (*ValidationResult, erro
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error scanning file: %v", err)
+		return nil, NewIOError(fmt.Sprintf("error scanning file: %s", fileName), err)
 	}
 	if lineCount > uint32(config.MaxInputFileLines) {
 		isValidLines = false
@@ -93,11 +76,18 @@ func validateFile(fileName string, config *BalerConfig) (*ValidationResult, erro
 	}, nil
 }
 
-func shouldIgnore(relativePath string, patternList *[]string) (bool, error) {
+func shouldIgnore(relativePath string, patternList *[]string) (bool, *BalerError) {
 	for _, pattern := range *patternList {
 		matches, err := path.Match(pattern, relativePath)
 		if err != nil {
-			return false, err
+			return false, NewValidationError(
+				fmt.Sprintf(
+					"error matching path with pattern:  %s %s",
+					pattern,
+					relativePath,
+				),
+				err,
+			)
 		}
 		if matches {
 			return true, nil
@@ -106,28 +96,28 @@ func shouldIgnore(relativePath string, patternList *[]string) (bool, error) {
 	return false, nil
 }
 
-func copyContent(srcPath string, destFile *os.File, srcRelativePath string, fileDelimiter string) error {
+func copyContent(srcPath string, destFile *os.File, srcRelativePath string, fileDelimiter string) *BalerError {
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
-		return fmt.Errorf("failed to open source file %w", err)
+		return NewIOError("failed to open source file", err)
 	}
 	defer srcFile.Close()
 
 	reader := bufio.NewReader(srcFile)
 	writer := bufio.NewWriter(destFile)
 	if _, err := writer.WriteString(fmt.Sprintf("\n%s%s\n", fileDelimiter, srcRelativePath)); err != nil {
-		return fmt.Errorf("failed to write filename comment: %w", err)
+		return NewIOError("failed to write filename comment", err)
 	}
 	if _, err = io.Copy(writer, reader); err != nil {
-		return fmt.Errorf("error copying file: %w", err)
+		return NewIOError("error copying file", err)
 	}
 	if err := writer.Flush(); err != nil {
-		return fmt.Errorf("error flushing writer: %w", err)
+		return NewIOError("error flushing writer", err)
 	}
 	return nil
 }
 
-func getValidIncreasedFileCounter(outputDir string, fileCounter int) (int, error) {
+func getValidIncreasedFileCounter(outputDir string, fileCounter int) (int, *BalerError) {
 	// this function checks the next output_<integer>.txt in outputDir
 	// such that integer > fileCounter
 	// This function runs one per output file
@@ -135,7 +125,7 @@ func getValidIncreasedFileCounter(outputDir string, fileCounter int) (int, error
 	// avoid collision
 	fileList, err := os.ReadDir(outputDir)
 	if err != nil {
-		return fileCounter, fmt.Errorf("unable to read output directory for file suffix", err)
+		return fileCounter, NewIOError("unable to read output directory for file suffix", err)
 	}
 	// map of existing counters
 	existingCounters := make(map[int]bool)
@@ -144,7 +134,7 @@ func getValidIncreasedFileCounter(outputDir string, fileCounter int) (int, error
 		if !file.IsDir() && strings.HasPrefix(name, "output_") && strings.HasSuffix(name, ".txt") {
 			numStr := name[7 : len(name)-4]
 			if num, err := strconv.Atoi(numStr); err != nil {
-				return fileCounter, fmt.Errorf("encountered invalid file in output directory: %w\n", err)
+				return fileCounter, NewValidationError("encountered invalid file in output directory", err)
 			} else {
 				existingCounters[num] = true
 			}
@@ -159,13 +149,17 @@ func getValidIncreasedFileCounter(outputDir string, fileCounter int) (int, error
 	return nextBigInteger, nil
 }
 
-func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath string, destinationDir string, config *BalerConfig) error {
+func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath string, destinationDir string, config *BalerConfig) (*[]string, *BalerError) {
 	var fileCounter = 0
 	processingStack := []string{absProcessingDirPath}
+	filesProcessed := &[]string{}
 
 	absSourcePath, err := filepath.Abs(sourcePath)
 	if err != nil {
-		return err
+		return &[]string{}, NewValidationError(
+			fmt.Sprintf("error getting absolute path for sourcePath: %s", sourcePath),
+			err,
+		)
 	}
 	// reference to file in destinationPath
 	outputFileName := fmt.Sprintf("output_%s.txt", strconv.Itoa(fileCounter))
@@ -173,9 +167,11 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 
 	destinationFile, err := os.OpenFile(destinationFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		return &[]string{}, NewIOError(
+			fmt.Sprintf("unable to open file: %s", destinationFileName),
+			err,
+		)
 	}
-	// TODO: how would clean-up work in recursion
 	defer destinationFile.Close()
 
 	for len(processingStack) > 0 {
@@ -184,19 +180,19 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 
 		entries, err := os.ReadDir(currentDir)
 		if err != nil {
-			return err
+			return &[]string{}, NewIOError(fmt.Sprintf("unable to read directory: %s", currentDir), err)
 		}
 		// iterate through entries
 		for _, entry := range entries {
 			absPath := filepath.Join(currentDir, entry.Name())
 			relPath, err := filepath.Rel(absSourcePath, absPath)
 			if err != nil {
-				return err
+				return &[]string{}, NewIOError(fmt.Sprintf("unable to get relative filepath for %s", absPath), err)
 			}
 
 			// ignore logic
-			if ignore, err := shouldIgnore(relPath, config.ExclusionPatterns); err != nil {
-				return err
+			if ignore, balerErr := shouldIgnore(relPath, config.ExclusionPatterns); balerErr != nil {
+				return &[]string{}, balerErr
 			} else if ignore {
 				continue
 			}
@@ -205,9 +201,9 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 			// for each directory, append to processingStack
 			if !entry.IsDir() {
 				// file validation before processing
-				validationResult, err := validateFile(absPath, config)
-				if err != nil {
-					return err
+				validationResult, balerErr := validateFile(absPath, config)
+				if balerErr != nil {
+					return &[]string{}, balerErr
 				}
 				if !validationResult.IsValidLines || !validationResult.IsValidSize || !validationResult.IsValidUTF8 {
 					// TODO: log
@@ -217,7 +213,10 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 				// if so, increment file name counter and set it as sink
 				currentDestinationFileInfo, err := destinationFile.Stat()
 				if err != nil {
-					return err
+					return &[]string{}, NewIOError(
+						fmt.Sprintf("unable to get information on %s", destinationFileName),
+						err,
+					)
 				}
 				currentDestinationFileSize := currentDestinationFileInfo.Size()
 				if currentDestinationFileSize+int64(validationResult.Size) > int64(config.MaxOutputFileSize) {
@@ -231,45 +230,59 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 						In which case, we could just increment fileCounter and call the
 						function again.
 					*/
-					fileCounter, err := getValidIncreasedFileCounter(destinationDir, fileCounter)
-					if err != nil {
-						return err
+					fileCounter, balerErr := getValidIncreasedFileCounter(destinationDir, fileCounter)
+					if balerErr != nil {
+						return &[]string{}, balerErr
 					}
 					outputFileName = fmt.Sprintf("output_%s.txt", strconv.Itoa(fileCounter))
 					destinationFileName = filepath.Join(destinationDir, outputFileName)
 					destinationFile, err = os.OpenFile(destinationFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 					if err != nil {
-						return err
+						return &[]string{}, NewIOError(
+							fmt.Sprintf("unable to open file %s", destinationFileName),
+							err,
+						)
 					}
 					defer destinationFile.Close()
 				}
 				// perform copy
-				if err = copyContent(absPath, destinationFile, relPath, config.FileDelimiter); err != nil {
-					return err
+				if balerErr = copyContent(absPath, destinationFile, relPath, config.FileDelimiter); balerErr != nil {
+					return &[]string{}, balerErr
 				}
 
 			} else {
 				processingStack = append(processingStack, absPath)
 			}
+			*filesProcessed = append(*filesProcessed, relPath)
 		}
 	}
-	return nil
+	return filesProcessed, nil
 }
 
-func Convert(inputPath string, outputPath string, config *BalerConfig) error {
+func Convert(inputPath string, outputPath string, config *BalerConfig) (*[]string, *BalerError) {
 	// check if input, output paths exists
 	if _, err := os.Stat(inputPath); err != nil {
-		return err
+		return &[]string{}, NewIOError(
+			fmt.Sprintf("unable to get information on %s. Are you sure this path exists? ", inputPath),
+			err,
+		)
 	}
 	if _, err := os.Stat(outputPath); err != nil {
-		return err
+		return &[]string{}, NewIOError(
+			fmt.Sprintf("unable to get information on %s. Are you sure this path exists? ", outputPath),
+			err,
+		)
 	}
 	absInputPath, err := filepath.Abs(inputPath)
 	if err != nil {
-		return err
+		return &[]string{}, NewIOError(
+			fmt.Sprintf("unable to get absolute path for %s", inputPath),
+			err,
+		)
 	}
-	if err := convertDirectoryAndSaveToFile(absInputPath, inputPath, outputPath, config); err != nil {
-		return err
+	processedPaths, balerErr := convertDirectoryAndSaveToFile(absInputPath, inputPath, outputPath, config)
+	if balerErr != nil {
+		return &[]string{}, balerErr
 	}
-	return nil
+	return processedPaths, nil
 }
