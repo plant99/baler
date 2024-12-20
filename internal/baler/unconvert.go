@@ -108,7 +108,7 @@ func UnConvert(sourceDir string, destinationDir string, config *BalerConfig) *Ba
 					}
 				}
 
-				destinationFileName = strings.TrimPrefix(line, "// filename: ")
+				destinationFileName = strings.TrimPrefix(line, config.FileDelimiter)
 				destinationFileName = strings.TrimSpace(destinationFileName)
 
 				destinationPath := filepath.Join(destinationDir, destinationFileName)

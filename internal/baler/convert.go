@@ -209,7 +209,15 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 					return &[]string{}, balerErr
 				}
 				if !validationResult.IsValidLines || !validationResult.IsValidSize || !validationResult.IsValidUTF8 {
-					// TODO: log
+					if validationResult.IsValidLines && config.Verbose {
+						config.Logger.Info("Skipping file because it exceeds maximum specified line count: " + relPath)
+					}
+					if validationResult.IsValidSize && config.Verbose {
+						config.Logger.Info("Skipping file because it exceeds maximum specified size: " + relPath)
+					}
+					if validationResult.IsValidUTF8 && config.Verbose {
+						config.Logger.Info("Skipping file because it is not valid UTF-8: " + relPath)
+					}
 					continue
 				}
 				// check if entry + existing sink file exceeds size limit
