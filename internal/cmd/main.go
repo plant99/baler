@@ -30,13 +30,13 @@ func AddCommands() {
 	}
 
 	// convert a repository
-	var maxInputFileSize uint64
+	var convertMaxInputFileSize, unconvertMaxInputFileSize uint64
 	var maxInputFileLines uint64
 	var maxOutputFileSize uint64
-	var maxBufferSize uint64
+	var convertMaxBufferSize, unconvertMaxBufferSize uint64
 	var exclusionPatterns []string
-	var fileDelimiter string
-	var verbose bool
+	var convertFileDelimiter, unconvertFileDelimiter string
+	var convertVerbose, unconvertVerbose bool
 	var convertCmd = &cobra.Command{
 		Use:   "convert",
 		Short: "Convert a directory into smaller text files.",
@@ -58,14 +58,14 @@ func AddCommands() {
 		Run: func(cmd *cobra.Command, args []string) {
 			config := &baler.BalerConfig{
 				MaxInputFileLines: maxInputFileLines,
-				MaxInputFileSize:  maxInputFileSize,
+				MaxInputFileSize:  convertMaxInputFileSize,
 				MaxOutputFileSize: maxOutputFileSize,
-				MaxBufferSize:     maxBufferSize,
+				MaxBufferSize:     convertMaxBufferSize,
 				ExclusionPatterns: &exclusionPatterns,
 				Operation:         baler.OperationConvert,
-				FileDelimiter:     fileDelimiter,
-				Logger:            newCobraLogger(cmd, verbose),
-				Verbose:           verbose,
+				FileDelimiter:     convertFileDelimiter,
+				Logger:            newCobraLogger(cmd, convertVerbose),
+				Verbose:           unconvertVerbose,
 			}
 			// validation
 			if config.MaxInputFileSize >= config.MaxOutputFileSize {
@@ -86,12 +86,12 @@ func AddCommands() {
 			cmd.Println("Conversion successful!")
 		},
 	}
-	convertCmd.Flags().Uint64VarP(&maxInputFileSize, "max-input-file-size", "i", 1*1024*1024, "Set maximum file size (in bytes) to be considered while converting.")
+	convertCmd.Flags().Uint64VarP(&convertMaxInputFileSize, "max-input-file-size", "i", 1*1024*1024, "Set maximum file size (in bytes) to be considered while converting.")
 	convertCmd.Flags().Uint64VarP(&maxInputFileLines, "max-input-file-lines", "l", 10000, "Set maximum lines a file can have to be considered while converting.")
 	convertCmd.Flags().Uint64VarP(&maxOutputFileSize, "max-output-file-size", "o", 5*1024*1024, "Set maximum size (in bytes) of the generated output file.")
-	convertCmd.Flags().Uint64VarP(&maxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
-	convertCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Set log level to verbose.")
-	convertCmd.Flags().StringVarP(&fileDelimiter, "delimiter", "d", "filename: ", `Text that separates 2 files in the generated file.
+	convertCmd.Flags().Uint64VarP(&convertMaxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
+	convertCmd.Flags().BoolVarP(&convertVerbose, "verbose", "v", false, "Set log level to verbose.")
+	convertCmd.Flags().StringVarP(&convertFileDelimiter, "delimiter", "d", "filename: ", `Text that separates 2 files in the generated file.
 
 		Note that this delimiter is ALWAYS.
 			- prefixed by a new line ("\n")
@@ -115,12 +115,12 @@ func AddCommands() {
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			config := &baler.BalerConfig{
-				MaxBufferSize:    maxBufferSize,
-				MaxInputFileSize: maxInputFileSize,
+				MaxBufferSize:    unconvertMaxBufferSize,
+				MaxInputFileSize: unconvertMaxInputFileSize,
 				Operation:        baler.OperationUnconvert,
-				FileDelimiter:    fileDelimiter,
-				Logger:           newCobraLogger(cmd, verbose),
-				Verbose:          verbose,
+				FileDelimiter:    unconvertFileDelimiter,
+				Logger:           newCobraLogger(cmd, unconvertVerbose),
+				Verbose:          unconvertVerbose,
 			}
 			err := baler.UnConvert(args[0], args[1], config)
 			if err != nil {
@@ -129,10 +129,10 @@ func AddCommands() {
 			cmd.Println("Un-conversion successful!")
 		},
 	}
-	unconvertCmd.Flags().Uint64VarP(&maxInputFileSize, "max-input-file-size", "i", 5*1024*1024, "Set maximum size (in bytes) of the input file(s).")
-	unconvertCmd.Flags().Uint64VarP(&maxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
-	unconvertCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Set log level to verbose.")
-	unconvertCmd.Flags().StringVarP(&fileDelimiter, "delimiter", "d", "// filename: ", `Text that separates 2 files in the generated file.
+	unconvertCmd.Flags().Uint64VarP(&unconvertMaxInputFileSize, "max-input-file-size", "i", 5*1024*1024, "Set maximum size (in bytes) of the input file(s).")
+	unconvertCmd.Flags().Uint64VarP(&unconvertMaxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
+	unconvertCmd.Flags().BoolVarP(&unconvertVerbose, "verbose", "v", false, "Set log level to verbose.")
+	unconvertCmd.Flags().StringVarP(&unconvertFileDelimiter, "delimiter", "d", "// filename: ", `Text that separates 2 files in the generated file.
 
 		Note that this delimiter is ALWAYS.
 			- prefixed by a new line ("\n")
