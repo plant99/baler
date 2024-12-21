@@ -25,28 +25,22 @@ build-all:
 	GOOS=windows GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)_windows_arm64.exe ./cmd/baler
 
 test:
-	@echo "Running tests..."
 	$(GOTEST) -v ./...
 
 clean:
-	@echo "Cleaning..."
 	$(GOCLEAN)
 	rm -rf $(BUILD_DIR)
-	rm -f coverage.out
+	rm -f coverage.out coverage.html
 
 lint:
-	@echo "Running linter..."
 	$(GOLINT) run
 
 coverage:
-	@echo "Running tests with coverage..."
 	$(GOTEST) -v -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 fmt:
-	@echo "Formatting code..."
 	$(GOCMD) fmt ./...
 
 vet:
-	@echo "Running go vet..."
 	$(GOCMD) vet ./...
