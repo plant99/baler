@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/plant99/baler/internal/baler"
 	"github.com/spf13/cobra"
 )
@@ -8,8 +10,7 @@ import (
 var BalerCommand = &cobra.Command{
 	Use:   "baler",
 	Short: "Convert text directories into minimum number of files to use with LLMs.",
-	Long: `baler converts, unconverts a text directory (e.g/ a code repository) into the minimum number of files such that
-	each file is smaller than a given size limit.`,
+	Long:  `baler converts, unconverts a text directory (e.g/ a code repository) into the minimum number of files such that each file is smaller than a given size limit.`,
 }
 
 func Run() {
@@ -65,6 +66,17 @@ func AddCommands() {
 				FileDelimiter:     fileDelimiter,
 				Logger:            newCobraLogger(cmd, verbose),
 				Verbose:           verbose,
+			}
+			// validation
+			if config.MaxInputFileSize >= config.MaxOutputFileSize {
+				handleError(
+					cmd,
+					fmt.Errorf(
+						"--max-input-file-size = %d cannot be > --max-output-file-size = %d",
+						config.MaxInputFileSize,
+						config.MaxOutputFileSize,
+					),
+				)
 			}
 			// TODO: get output file list
 			_, err := baler.Convert(args[0], args[1], config)
