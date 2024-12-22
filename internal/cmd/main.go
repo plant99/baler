@@ -42,17 +42,17 @@ func AddCommands() {
 		Short: "Convert a directory into smaller text files.",
 		Long: `Convert a directory into the minimum number of text files.
 
-		Arguments: <source-files-directory> <converted-files-directory>
+Arguments: <source-files-directory> <converted-files-directory>
 
 
-		Size Handling:
-			- Input files larger than --max-input-size are skipped
-			- Output files are split when they reach --max-output-size
-			- Read/Write buffer size defaults to input file size if not specified
+Size Handling:
+	- Input files larger than --max-input-file-size are skipped
+	- Output files are split when they reach --max-output-file-size
+	- Read/Write buffer size defaults to "--max-input-file-size" if not specified
 
-		e.g/
+e.g/
 
-		$ baler convert code_directory/ output_directory/
+$ baler convert code_directory/ output_directory/
 		`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
@@ -90,12 +90,17 @@ func AddCommands() {
 	convertCmd.Flags().Uint64VarP(&maxInputFileLines, "max-input-file-lines", "l", 10000, "Set maximum lines a file can have to be considered while converting.")
 	convertCmd.Flags().Uint64VarP(&maxOutputFileSize, "max-output-file-size", "o", 5*1024*1024, "Set maximum size (in bytes) of the generated output file.")
 	convertCmd.Flags().Uint64VarP(&convertMaxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
-	convertCmd.Flags().BoolVarP(&convertVerbose, "verbose", "v", false, "Set log level to verbose.")
-	convertCmd.Flags().StringVarP(&convertFileDelimiter, "delimiter", "d", "// filename: ", `Text that separates 2 files in the generated file.
-
-		Note that this delimiter is ALWAYS.
-			- prefixed by a new line ("\n")
-			- suffixed by the next file name and a new line ("\n")`)
+	convertCmd.Flags().BoolVarP(&convertVerbose, "verbose", "v", false, "Run baler in verbose mode.")
+	convertCmd.Flags().StringVarP(
+		&convertFileDelimiter,
+		"delimiter",
+		"d",
+		"// filename: ",
+		`Text that separates 2 files in the generated file.
+Note that this delimiter is ALWAYS.
+	- prefixed by a new line ("\n")
+	- suffixed by the next file name and a new line ("\n")`,
+	)
 	convertCmd.Flags().StringSliceVarP(&exclusionPatterns, "exclude", "e", []string{}, "A list of exclusion patterns for baler. e.g '-e \"node_modules*\" -e \"poetry.*\" -e \"package.*\"'")
 
 	// unconvert a group of files into directory
@@ -104,13 +109,13 @@ func AddCommands() {
 		Short: "Restore original files from converted format.",
 		Long: `Reconstruct the group of text files used for 'baler convert', from the output files of baler.
 
-		Arguments: <converted-files-directory> <source-files-directory>
+Arguments: <converted-files-directory> <source-files-directory>
 
-		Buffer size defaults to input file size if not specified.
+Buffer size defaults to input file size if not specified.
 
-		e.g/
+e.g/
 
-		$ baler unconvert output_directory/ new_code_directory/
+$ baler unconvert output_directory/ new_code_directory/
 		`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
@@ -131,11 +136,16 @@ func AddCommands() {
 	}
 	unconvertCmd.Flags().Uint64VarP(&unconvertMaxInputFileSize, "max-input-file-size", "i", 5*1024*1024, "Set maximum size (in bytes) of the input file(s).")
 	unconvertCmd.Flags().Uint64VarP(&unconvertMaxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
-	unconvertCmd.Flags().BoolVarP(&unconvertVerbose, "verbose", "v", false, "Set log level to verbose.")
-	unconvertCmd.Flags().StringVarP(&unconvertFileDelimiter, "delimiter", "d", "// filename: ", `Text that separates 2 files in the generated file.
-
-		Note that this delimiter is ALWAYS.
-			- prefixed by a new line ("\n")
-			- suffixed by the next file name and a new line ("\n")`)
+	unconvertCmd.Flags().BoolVarP(&unconvertVerbose, "verbose", "v", false, "Run baler in verbose mode.")
+	unconvertCmd.Flags().StringVarP(
+		&unconvertFileDelimiter,
+		"delimiter",
+		"d",
+		"// filename: ",
+		`Text that separates 2 files in the generated file.
+Note that this delimiter is ALWAYS.
+	- prefixed by a new line ("\n")
+	- suffixed by the next file name and a new line ("\n")`,
+	)
 	BalerCommand.AddCommand(versionCmd, convertCmd, unconvertCmd)
 }
