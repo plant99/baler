@@ -5,7 +5,7 @@ set of files designed for use with LLMs like Claude, LLama.
 
 ## Installation
 
-### Binary Executables
+### Binary executables
 
 [GitHub releases of `baler`](https://github.com/plant99/baler/releases) has binary executables for major Operating Systems and Architectures.
 
@@ -13,7 +13,7 @@ set of files designed for use with LLMs like Claude, LLama.
 
     $ go install github.com/plant99/baler/cmd/baler@latest
 
-### From Source
+### From source
 
 ```sh
 git clone https://github.com/plant99/baler.git && cd baler
