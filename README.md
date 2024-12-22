@@ -32,6 +32,7 @@ baler unconvert <destination_directory> <source_directory>
 ## Intended Usage
 
 `baler`'s intended use is for LLM ingestion.
+
 For interfaces where someone cannot sync their projects automatically like Claude, LLama, *(and unlike Codeium, Copilot)*,
 `baler` would help you convert a source code repository into a few text files dealing with which can be much easier.
 

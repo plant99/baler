@@ -20,7 +20,7 @@ func Run() {
 
 func AddCommands() {
 	// version command
-	version := "0.0.1-beta"
+	version := "0.0.1-b0"
 	var versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Show the version of baler",
