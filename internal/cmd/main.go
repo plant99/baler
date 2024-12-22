@@ -65,7 +65,7 @@ func AddCommands() {
 				Operation:         baler.OperationConvert,
 				FileDelimiter:     convertFileDelimiter,
 				Logger:            newCobraLogger(cmd, convertVerbose),
-				Verbose:           unconvertVerbose,
+				Verbose:           convertVerbose,
 			}
 			// validation
 			if config.MaxInputFileSize >= config.MaxOutputFileSize {
@@ -91,7 +91,7 @@ func AddCommands() {
 	convertCmd.Flags().Uint64VarP(&maxOutputFileSize, "max-output-file-size", "o", 5*1024*1024, "Set maximum size (in bytes) of the generated output file.")
 	convertCmd.Flags().Uint64VarP(&convertMaxBufferSize, "max-buffer-size", "b", 0, "Set maximum size (in bytes) of buffer for copy operation.")
 	convertCmd.Flags().BoolVarP(&convertVerbose, "verbose", "v", false, "Set log level to verbose.")
-	convertCmd.Flags().StringVarP(&convertFileDelimiter, "delimiter", "d", "filename: ", `Text that separates 2 files in the generated file.
+	convertCmd.Flags().StringVarP(&convertFileDelimiter, "delimiter", "d", "// filename: ", `Text that separates 2 files in the generated file.
 
 		Note that this delimiter is ALWAYS.
 			- prefixed by a new line ("\n")

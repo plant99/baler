@@ -29,6 +29,7 @@ func customScanner(file *os.File, config *BalerConfig) *bufio.Scanner {
 	} else {
 		maxBufSize = config.MaxInputFileSize
 	}
+	// if maxBufSize < 64 * 1024, it won't affect the buffer
 	scanner.Buffer(buf, int(maxBufSize))
 	return scanner
 }
@@ -63,7 +64,13 @@ func validateFile(fileName string, config *BalerConfig) (*ValidationResult, *Bal
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, NewIOError(fmt.Sprintf("error scanning file: %s", fileName), err)
+		return nil, NewIOError(
+			fmt.Sprintf(
+				"error scanning file: %s.\nPlease try setting an increased '--max-input-file-size' or '--max-buffer-size'",
+				fileName,
+			),
+			err,
+		)
 	}
 	if lineCount > uint32(config.MaxInputFileLines) {
 		isValidLines = false
@@ -209,13 +216,13 @@ func convertDirectoryAndSaveToFile(absProcessingDirPath string, sourcePath strin
 					return &[]string{}, balerErr
 				}
 				if !validationResult.IsValidLines || !validationResult.IsValidSize || !validationResult.IsValidUTF8 {
-					if validationResult.IsValidLines && config.Verbose {
+					if !validationResult.IsValidLines && config.Verbose {
 						config.Logger.Info("Skipping file because it exceeds maximum specified line count: " + relPath)
 					}
-					if validationResult.IsValidSize && config.Verbose {
+					if !validationResult.IsValidSize && config.Verbose {
 						config.Logger.Info("Skipping file because it exceeds maximum specified size: " + relPath)
 					}
-					if validationResult.IsValidUTF8 && config.Verbose {
+					if !validationResult.IsValidUTF8 && config.Verbose {
 						config.Logger.Info("Skipping file because it is not valid UTF-8: " + relPath)
 					}
 					continue

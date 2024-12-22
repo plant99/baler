@@ -150,7 +150,10 @@ func UnConvert(sourceDir string, destinationDir string, config *BalerConfig) *Ba
 
 		if err := scanner.Err(); err != nil {
 			return NewIOError(
-				fmt.Sprintf("error scanning file: %s", path),
+				fmt.Sprintf(
+					"error scanning file: %s.\nPlease try setting an increased '--max-input-file-size' or '--max-buffer-size'",
+					path,
+				),
 				err,
 			)
 		}
