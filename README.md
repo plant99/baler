@@ -1,7 +1,7 @@
 # baler
 
 `baler` is a CLI-tool to convert a text based directory (like a code repository) into a minimal
-set of files designed for use with LLMs like Claude, LLama.
+set of files designed for use with LLMs like Claude, LLama, DeepSeek, ChatGPT.
 
 ## Installation
 
